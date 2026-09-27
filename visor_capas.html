@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f1f4f7">
   <title>PID · visor geográfico</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="static/visor_capas.css?v=20260927-13">
+  <link rel="stylesheet" href="static/visor_capas.css?v=20260927-16">
 </head>
 <body>
   <aside class="sidebar">
@@ -18,6 +18,7 @@
     <nav class="dashboard-switcher" role="tablist" aria-label="Dashboards">
       <button id="tab-no-ont" type="button" role="tab" aria-selected="false" aria-controls="entity-insights" tabindex="-1">Datos No Ontológicos</button>
       <button id="tab-dashboard-two" type="button" role="tab" aria-selected="true" aria-controls="dashboard-two">Recursos turísticos</button>
+      <button id="tab-usage" type="button" role="tab" aria-selected="false" aria-controls="usage-dashboard" tabindex="-1">Uso</button>
     </nav>
 
     <div class="sidebar-scroll">
@@ -88,6 +89,58 @@
 
       </section>
 
+      <section id="usage-dashboard" class="dashboard usage-dashboard" role="tabpanel" aria-labelledby="tab-usage" aria-label="Uso de los Servicios de la PID" hidden>
+        <header class="dashboard-heading"><span class="insights-kicker">Uso de los Servicios de la PID</span></header>
+        <div id="usage-kpis" class="usage-kpis"><p class="stats-empty">Cargando datos de uso…</p></div>
+
+        <section class="dashboard-chart-section">
+          <div class="dashboard-chart-heading"><h3>Análisis por ámbito</h3><span id="usage-level-label">Municipios</span></div>
+          <div class="dashboard-tabs usage-level-tabs" role="group" aria-label="Ámbito de las estadísticas de uso">
+            <button type="button" data-usage-level="municipio" aria-pressed="true">Municipios</button>
+            <button type="button" data-usage-level="provincia" aria-pressed="false">Provincias</button>
+            <button type="button" data-usage-level="supramunicipal" aria-pressed="false">Supramunicipales</button>
+          </div>
+          <div class="usage-status-heading"><h4>Estado de los destinos</h4><span id="usage-status-total"></span></div>
+          <div id="usage-status-chart" class="usage-bars"></div>
+          <div class="usage-status-heading"><h4>Usuarios asociados por destino</h4><span></span></div>
+          <div id="usage-user-chart" class="usage-bars"></div>
+        </section>
+
+        <section class="dashboard-chart-section">
+          <div class="dashboard-chart-heading"><h3>Soluciones con más destinos</h3><span id="usage-module-level-label">Municipios</span></div>
+          <p class="usage-caption">Destinos con cada solución registrada. “Gestión del Destino DTI” aparece como servicio base.</p>
+          <div id="usage-module-chart" class="cms-category-chart"></div>
+        </section>
+
+        <section class="dashboard-chart-section usage-evolution-section">
+          <div class="dashboard-chart-heading"><h3>Evolución de altas y soluciones</h3><span>Por mes</span></div>
+          <p class="usage-caption">Altas de destinos y fechas de contratación de soluciones digitales.</p>
+          <div id="usage-evolution-chart" class="usage-evolution-chart"></div>
+        </section>
+
+        <section class="dashboard-chart-section usage-map-controls">
+          <div class="dashboard-chart-heading"><h3>Mapas temáticos</h3><span>Mostrar / ocultar</span></div>
+          <span class="cms-metric-label">Ámbito geográfico</span>
+          <div class="dashboard-tabs cms-map-level-tabs" role="group" aria-label="Ámbito del mapa de uso">
+            <button type="button" data-usage-map-level="municipio" aria-pressed="true">Municipios</button>
+            <button type="button" data-usage-map-level="provincia" aria-pressed="false">Provincias</button>
+            <button type="button" data-usage-map-level="supramunicipal" aria-pressed="false">Supramunicipales</button>
+          </div>
+          <span class="cms-metric-label cms-theme-list-label">Capas temáticas <small>Activa una cada vez</small></span>
+          <div id="usage-map-layers" class="cms-map-layers">
+            <label class="cms-theme-option"><input type="checkbox" data-usage-map-metric="destinations"><i style="--cms-theme-color:#d78334"></i><span>Destinos registrados</span></label>
+            <label class="cms-theme-option"><input type="checkbox" data-usage-map-metric="users"><i style="--cms-theme-color:#45a28b"></i><span>Usuarios asociados</span></label>
+            <label class="cms-theme-option"><input type="checkbox" data-usage-map-metric="published"><i style="--cms-theme-color:#d72f7e"></i><span>Destinos publicados</span></label>
+            <label class="cms-theme-option"><input type="checkbox" data-usage-map-metric="module"><i style="--cms-theme-color:#7894b2"></i><span>Destinos con solución seleccionada</span></label>
+          </div>
+          <label class="usage-module-filter" for="usage-module-select">Solución digital
+            <select id="usage-module-select"><option value="">Selecciona una solución</option></select>
+          </label>
+          <p id="usage-map-coverage" class="cms-source-note"></p>
+          <p class="cms-source-note">Los usuarios se suman una vez por destino. Las soluciones reflejan asociaciones registradas en el Excel, no actividad de acceso.</p>
+        </section>
+      </section>
+
       <p class="map-file-notice" hidden>Para consultar el mapa, abre el proyecto desde el servidor local. Si Python está instalado, puedes usar <code>python app.py</code>.</p>
     </div>
   </aside>
@@ -101,6 +154,6 @@
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="static/visor_capas.js?v=20260927-15"></script>
+  <script src="static/visor_capas.js?v=20260927-16"></script>
 </body>
 </html>

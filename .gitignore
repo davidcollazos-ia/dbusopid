@@ -14,6 +14,7 @@ Data/*
 !Data/visor_estadisticas.json
 !Data/visor_cms_stats.json
 !Data/visor_cms_timeline.json
+!Data/visor_usage_stats.json
 !Data/visor_municipios.geojson.gz
 !Data/visor_provincias.geojson.gz
 !Data/visor_comarcas.geojson.gz

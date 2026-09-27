@@ -88,9 +88,18 @@
   const thematicScales = new Map();
   const cmsThematicStates = new Map(Object.keys(themeDefinitions).map(key => [key, false]));
   const cmsScales = new Map();
+  const usageThematicStates = new Map(Object.keys(themeDefinitions).map(key => [key, false]));
+  const usageScales = new Map();
   let currentStats = null;
   let cmsStats = null;
   let cmsPromise = null;
+  let usageStats = null;
+  let usagePromise = null;
+  let usageLevel = 'municipio';
+  let usageMapLevel = 'municipio';
+  let usageMetric = 'destinations';
+  let usageMetricEnabled = false;
+  let usageModuleName = '';
   let cmsTimelineStats = null;
   let cmsTimelinePromise = null;
   let cmsMetric = 'weekly-load';
@@ -198,6 +207,22 @@
       });
     }
     return cmsTimelinePromise;
+  }
+
+  function loadUsageStats() {
+    if (!usagePromise) {
+      usagePromise = fetch('Data/visor_usage_stats.json', { cache: 'no-cache' }).then(response => {
+        if (!response.ok) throw new Error(`No se pudieron cargar los datos de uso (${response.status}).`);
+        return response.json();
+      }).then(statistics => {
+        usageStats = statistics;
+        return statistics;
+      }).catch(error => {
+        usagePromise = null;
+        throw error;
+      });
+    }
+    return usagePromise;
   }
 
   function formatCount(value) {
@@ -313,6 +338,97 @@
     renderCmsCategoryChart();
     renderCmsLoadEvolution();
     renderCmsLegend();
+  }
+
+  const usageLevelLabels = {
+    municipio: 'Municipios',
+    provincia: 'Provincias',
+    supramunicipal: 'Entidades supramunicipales'
+  };
+
+  function renderUsageDashboard(statistics) {
+    usageStats = statistics;
+    const summary = statistics.summary;
+    $('#usage-kpis').innerHTML = [
+      ['Destinos registrados', summary.destinations, `${formatCount(summary.matched_destinations)} con código territorial`],
+      ['Usuarios asociados', summary.users, 'Suma por destino; no son usuarios únicos'],
+      ['Soluciones digitales', summary.modules, `${formatCount(summary.module_associations)} asociaciones destino-solución`]
+    ].map(([label, value, detail]) => `<article class="usage-kpi"><span>${safe(label)}</span><strong>${formatCount(value)}</strong><small>${safe(detail)}</small></article>`).join('');
+    const modules = statistics.modules.filter(module => !module.base);
+    const moduleSelect = $('#usage-module-select');
+    moduleSelect.innerHTML = '<option value="">Selecciona una solución</option>' + modules.map(module => `<option value="${safe(module.name)}">${safe(module.name)}</option>`).join('');
+    usageModuleName = modules[0]?.name || '';
+    moduleSelect.value = usageModuleName;
+    $('#usage-map-coverage').textContent = `${formatCount(summary.matched_destinations)} de ${formatCount(summary.destinations)} destinos asociados a un código territorial. Los demás se conservan en los totales y no se pintan en el mapa.`;
+    renderUsageCharts();
+    rebuildUsageScales();
+    renderUsageLegend();
+  }
+
+  function renderUsageCharts() {
+    if (!usageStats) return;
+    const level = usageStats.level_summaries?.[usageLevel];
+    if (!level) return;
+    const total = Number(level.destinations) || 0;
+    $('#usage-level-label').textContent = usageLevelLabels[usageLevel];
+    $('#usage-module-level-label').textContent = usageLevelLabels[usageLevel];
+    $('#usage-status-total').textContent = `${formatCount(total)} destinos con código`;
+    document.querySelectorAll('[data-usage-level]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.usageLevel === usageLevel)));
+    const statusRows = [
+      { label: 'Publicados', value: level.published, className: 'is-published' },
+      { label: 'No publicados', value: level.unpublished, className: 'is-unpublished' }
+    ];
+    $('#usage-status-chart').innerHTML = statusRows.map(item => usageBarMarkup(item.label, item.value, total, item.className)).join('');
+    const userRows = level.user_distribution || [];
+    const maxUsers = Math.max(1, ...userRows.map(item => item.destinations));
+    $('#usage-user-chart').innerHTML = userRows.map(item => usageBarMarkup(
+      item.label === '0 usuarios' ? item.label : `${item.label} usuarios`,
+      item.destinations,
+      maxUsers
+    )).join('');
+    const moduleRows = usageStats.modules.filter(module => !module.base)
+      .map(module => ({ name: module.name, value: Number(level.module_destinations?.[module.name]) || 0 }))
+      .filter(module => module.value > 0)
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name, 'es'))
+      .slice(0, 8);
+    const moduleMax = Math.max(1, ...moduleRows.map(item => item.value));
+    $('#usage-module-chart').innerHTML = moduleRows.length
+      ? moduleRows.map(item => usageBarMarkup(item.name, item.value, moduleMax, '', `${formatCount(item.value)} destinos`)).join('')
+      : '<p class="stats-empty">No hay soluciones con destino asociado en este ámbito.</p>';
+    renderUsageEvolution();
+  }
+
+  function usageBarMarkup(label, value, maximum, className = '', title = '') {
+    const width = maximum ? Math.max(value ? 1 : 0, value / maximum * 100) : 0;
+    return `<div class="usage-bar-row ${className}" title="${safe(title || `${formatCount(value)} destinos`)}"><div class="usage-bar-label"><span>${safe(label)}</span><strong>${formatCount(value)}</strong></div><div class="usage-bar-track"><i style="width:${Math.min(100, width).toFixed(1)}%"></i></div></div>`;
+  }
+
+  function renderUsageEvolution() {
+    if (!usageStats) return;
+    const months = usageStats.months || [];
+    if (!months.length) {
+      $('#usage-evolution-chart').innerHTML = '<p class="stats-empty">No hay fechas para representar.</p>';
+      return;
+    }
+    const destinations = usageStats.monthly_destinations || [];
+    const contracts = usageStats.monthly_contracts || [];
+    const max = Math.max(1, ...destinations, ...contracts);
+    const width = 880, height = 250, left = 58, right = 18, top = 14, bottom = 38;
+    const plotWidth = width - left - right, plotHeight = height - top - bottom;
+    const x = index => left + plotWidth * (months.length < 2 ? 0.5 : index / (months.length - 1));
+    const y = value => top + plotHeight * (1 - value / max);
+    const grids = Array.from({ length: 5 }, (_, index) => {
+      const value = max * (4 - index) / 4, gy = y(value);
+      return `<line x1="${left}" y1="${gy}" x2="${width - right}" y2="${gy}" class="usage-evolution-grid"/><text x="${left - 8}" y="${gy + 4}" text-anchor="end" class="usage-evolution-axis">${formatCount(Math.round(value))}</text>`;
+    }).join('');
+    const line = values => values.map((value, index) => `${x(index)},${y(Number(value) || 0)}`).join(' ');
+    const labels = months.map((month, index) => {
+      if (index % 3 !== 0 && index !== months.length - 1) return '';
+      const [year, number] = month.split('-');
+      const monthName = monthLabels[Number(number) - 1] || number;
+      return `<text x="${x(index)}" y="${height - 10}" text-anchor="middle" class="usage-evolution-axis">${monthName} ${year.slice(-2)}</text>`;
+    }).join('');
+    $('#usage-evolution-chart').innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Altas mensuales de destinos y soluciones con fecha de contratación">${grids}<polyline points="${line(destinations)}" class="usage-evolution-destinations"/><polyline points="${line(contracts)}" class="usage-evolution-contracts"/>${labels}</svg><div class="usage-evolution-legend"><span><i></i>Altas de destinos</span><span><i></i>Soluciones con fecha registrada</span></div>`;
   }
 
   function cmsLayerForMapLevel(level) {
@@ -524,7 +640,7 @@
   }
 
   function renderCmsLegend() {
-    if (!cmsStats || [...thematicStates.values()].some(Boolean)) return;
+    if (!cmsStats || [...thematicStates.values()].some(Boolean) || [...usageThematicStates.values()].some(Boolean)) return;
     const active = [...cmsThematicStates].filter(([, visible]) => visible).map(([key]) => key);
     const legend = $('#thematic-legend');
     if (!active.length) {
@@ -549,6 +665,141 @@
       return `<section class="legend-theme"><h3>${safe(title)}</h3>${coverageNote}${rows}</section>`;
     }).join('')}`;
     $('#cms-timeline-slider')?.addEventListener('input', event => setCmsTimelineIndex(Number(event.target.value)));
+  }
+
+  const usagePalette = ['#fff0b3', '#ffd166', '#ffac38', '#f47721', '#dc3b72', '#8c1d61'];
+  const usageMetricLabels = {
+    destinations: 'Destinos registrados',
+    users: 'Usuarios asociados',
+    published: 'Destinos publicados',
+    module: 'Destinos con solución seleccionada'
+  };
+
+  function usageLayerForLevel(level) {
+    return level === 'municipio' ? 'municipios' : level === 'provincia' ? 'provincias' : 'comarcas';
+  }
+
+  function usageAreaForFeature(key, feature) {
+    if (!usageStats) return null;
+    const properties = feature?.properties || {};
+    const code = key === 'comarcas' ? properties.ID_COMARCA : properties.NATCODE;
+    const level = key === 'comarcas' ? 'supramunicipal' : key === 'provincias' ? 'provincia' : 'municipio';
+    return usageStats.levels?.[level]?.[String(code)] || null;
+  }
+
+  function usageMetricValue(area) {
+    if (!area) return 0;
+    if (usageMetric === 'module') return Number(area.module_destinations?.[usageModuleName]) || 0;
+    return Number(area[usageMetric]) || 0;
+  }
+
+  function rebuildUsageScales() {
+    if (!usageStats) return;
+    for (const key of Object.keys(themeDefinitions)) {
+      const values = Object.values(usageStats.levels?.[themeDefinitions[key].level === 'comarca' ? 'supramunicipal' : themeDefinitions[key].level] || {})
+        .map(area => usageMetricValue(area)).filter(value => Number.isFinite(value) && value > 0).sort((a, b) => a - b);
+      const cuts = [];
+      for (let index = 1; index < usagePalette.length; index += 1) {
+        const cut = values[Math.ceil(index * values.length / usagePalette.length) - 1];
+        if (cut != null && cut > (cuts.at(-1) ?? -Infinity) && cut < values.at(-1)) cuts.push(cut);
+      }
+      let previous = 0;
+      const bins = [...cuts, Infinity].map((maximum, index) => {
+        const members = values.filter(value => value > previous && value <= maximum);
+        previous = maximum;
+        return members.length ? {
+          minimum: members[0],
+          maximum: members.at(-1),
+          count: members.length,
+          paletteIndex: binsIndex(index, usagePalette.length, cuts.length + 1)
+        } : null;
+      }).filter(Boolean);
+      usageScales.set(key, { palette: usagePalette, bins });
+    }
+  }
+
+  function binsIndex(index, paletteLength, binCount) {
+    return binCount < 2 ? Math.floor(paletteLength / 2) : Math.round(index / (binCount - 1) * (paletteLength - 1));
+  }
+
+  function usageScaleIndex(key, value) {
+    return usageScales.get(key)?.bins.find(bin => value >= bin.minimum && value <= bin.maximum)?.paletteIndex ?? 0;
+  }
+
+  function usageStyleForFeature(key, feature) {
+    const value = usageMetricValue(usageAreaForFeature(key, feature));
+    const scale = usageScales.get(key);
+    if (!value || !scale) return key === 'provincias'
+      ? { color: '#ffffff', weight: 0.55, opacity: 0.9, fillColor: '#e4e8ec', fillOpacity: 0.76 }
+      : { stroke: false, weight: 0, opacity: 0, fillColor: '#e1e5e9', fillOpacity: 0.92 };
+    const fillColor = scale.palette[usageScaleIndex(key, value)];
+    return key === 'provincias'
+      ? { color: '#ffffff', weight: 0.55, opacity: 0.9, fillColor, fillOpacity: 0.84 }
+      : { stroke: false, weight: 0, opacity: 0, fillColor, fillOpacity: 0.96 };
+  }
+
+  function refreshUsageLayers() {
+    for (const [key, visible] of usageThematicStates) {
+      const layer = layerInstances.get(key);
+      if (visible && layer && map.hasLayer(layer)) layer.setStyle(feature => styleForFeature(key, feature));
+    }
+    renderUsageLegend();
+  }
+
+  function renderUsageLegend() {
+    const active = [...usageThematicStates].filter(([, visible]) => visible).map(([key]) => key);
+    const legend = $('#thematic-legend');
+    if (!usageStats || !active.length) {
+      if (![...cmsThematicStates.values()].some(Boolean) && ![...thematicStates.values()].some(Boolean)) {
+        legend.hidden = true;
+        legend.replaceChildren();
+      }
+      return;
+    }
+    const metricLabel = usageMetric === 'module' && usageModuleName
+      ? `${usageMetricLabels.module}: ${usageModuleName}`
+      : usageMetricLabels[usageMetric];
+    legend.hidden = false;
+    legend.innerHTML = `<section class="legend-theme"><h3>PID · ${safe(metricLabel)}</h3><small>Rangos por cuantiles · ámbito seleccionado</small><div class="legend-entry"><i style="background:#e4e8ec"></i><span>0 · sin datos</span></div>${active.map(key => {
+      const scale = usageScales.get(key);
+      const level = themeDefinitions[key].level === 'comarca' ? 'supramunicipal' : themeDefinitions[key].level;
+      const totalAreas = geographicTotals[themeDefinitions[key].level] || 0;
+      const covered = Object.values(usageStats.levels?.[level] || {}).filter(area => area.destinations > 0).length;
+      const rows = (scale?.bins || []).map(bin => `<div class="legend-entry"><i style="background:${scale.palette[bin.paletteIndex]}"></i><span>${formatCount(bin.minimum)}${bin.minimum === bin.maximum ? '' : `–${formatCount(bin.maximum)}`} <small>(${formatCount(bin.count)})</small></span></div>`).join('');
+      return `<section class="legend-theme"><h3>${safe(definitions[key].label)}</h3><small class="legend-coverage">${formatCount(covered)} de ${formatCount(totalAreas)} territorios con destinos</small>${rows || '<small>Sin valores para pintar.</small>'}</section>`;
+    }).join('')}<p class="cms-source-note">Las relaciones supramunicipales agregan los destinos de sus municipios miembros.</p></section>`;
+  }
+
+  async function setUsageMetricLayer(metric, enabled) {
+    usageMetric = metric;
+    const selectedLayer = usageLayerForLevel(usageMapLevel);
+    if (enabled) {
+      if ([...thematicStates.values()].some(Boolean) || [...cmsThematicStates.values()].some(Boolean) || [...usageThematicStates.values()].some(Boolean)) {
+        await clearAllThematicLayers();
+      }
+      usageMetricEnabled = true;
+      usageThematicStates.set(selectedLayer, true);
+      document.querySelectorAll('[data-usage-map-metric]').forEach(input => { input.checked = input.dataset.usageMapMetric === metric; });
+      rebuildUsageScales();
+      const baseInput = document.querySelector(`[data-layer="${selectedLayer}"]`);
+      if (!baseInput.checked) {
+        baseInput.checked = true;
+        await toggleLayer(selectedLayer, true);
+      }
+      const layer = layerInstances.get(selectedLayer);
+      if (layer) layer.setStyle(feature => styleForFeature(selectedLayer, feature));
+    } else {
+      usageMetricEnabled = false;
+      usageThematicStates.set(selectedLayer, false);
+      document.querySelectorAll('[data-usage-map-metric]').forEach(input => { input.checked = false; });
+      const baseInput = document.querySelector(`[data-layer="${selectedLayer}"]`);
+      if (baseInput.checked) {
+        baseInput.checked = false;
+        await toggleLayer(selectedLayer, false);
+      }
+    }
+    rebuildUsageScales();
+    renderThematicLegend();
   }
 
   function setCmsTimelineIndex(index) {
@@ -620,6 +871,7 @@
   }
 
   function styleForFeature(key, feature) {
+    if (usageThematicStates.get(key)) return usageStyleForFeature(key, feature);
     if (cmsThematicStates.get(key)) return cmsStyleForFeature(key, feature);
     if (!thematicStates.get(key)) return definitions[key].style();
     const records = Number(statsForFeature(key, feature)?.cumulative_2026?.[timelineMonth]) || 0;
@@ -635,7 +887,7 @@
   }
 
   async function setThematicLayer(key, visible) {
-    if (visible && [...cmsThematicStates.values()].some(Boolean)) await clearAllThematicLayers();
+    if (visible && ([...cmsThematicStates.values()].some(Boolean) || [...usageThematicStates.values()].some(Boolean))) await clearAllThematicLayers();
     if (visible && activeDashboard === 'cms') {
       activeDashboard = 'infodestinos';
       dashboardTabs.forEach(({ tab, panel }) => {
@@ -662,6 +914,10 @@
 
   function renderThematicLegend() {
     const legend = $('#thematic-legend');
+    if ([...usageThematicStates.values()].some(Boolean)) {
+      renderUsageLegend();
+      return;
+    }
     if ([...cmsThematicStates.values()].some(Boolean)) {
       renderCmsLegend();
       return;
@@ -732,12 +988,13 @@
   }
 
   async function clearAllThematicLayers() {
-    for (const states of [thematicStates, cmsThematicStates]) {
+    for (const states of [thematicStates, cmsThematicStates, usageThematicStates]) {
       for (const key of states.keys()) states.set(key, false);
     }
-    document.querySelectorAll('[data-theme], [data-cms-theme], [data-cms-map-metric]').forEach(input => { input.checked = false; });
+    document.querySelectorAll('[data-theme], [data-cms-theme], [data-cms-map-metric], [data-usage-map-metric]').forEach(input => { input.checked = false; });
     cmsMetricEnabled = false;
     cmsLoadMapEnabled = false;
+    usageMetricEnabled = false;
     const loadMapToggle = $('#cms-load-map-toggle');
     if (loadMapToggle) loadMapToggle.checked = false;
     for (const key of layerInstances.keys()) {
@@ -749,6 +1006,7 @@
     }
     renderThematicLegend();
     renderCmsLegend();
+    renderUsageLegend();
     updateStatus();
   }
 
@@ -762,7 +1020,7 @@
         panel.hidden = !selected;
       });
     }
-    if (visible && [...thematicStates.values()].some(Boolean)) await clearAllThematicLayers();
+    if (visible && ([...thematicStates.values()].some(Boolean) || [...usageThematicStates.values()].some(Boolean))) await clearAllThematicLayers();
     cmsThematicStates.set(key, visible);
     const baseInput = document.querySelector(`[data-layer="${key}"]`);
     if (visible && !baseInput.checked) {
@@ -841,13 +1099,32 @@
     return `<section class="territory-stats"><h3>Datos CMS Semántico</h3><div class="stats-grid"><div><strong>${cmsFormat(area.total)}</strong><span>saldo neto</span></div><div><strong>${formatCount(area.source_rows)}</strong><span>destinos sumados</span></div></div><p class="stats-dates">Código territorial: ${safe(area.code)} · ${safe(names)}</p><h4>Recuentos por categoría</h4><ul>${list}</ul></section>`;
   }
 
+  function usageStatisticsMarkup(key, properties) {
+    const code = key === 'comarcas' ? properties.ID_COMARCA : properties.NATCODE;
+    const area = usageAreaForFeature(key, { properties });
+    const title = key === 'comarcas' ? properties.COMARCA || 'Entidad supramunicipal' : properties.NAMEUNIT || 'Territorio';
+    if (!area?.destinations) {
+      return `<section class="territory-stats"><h3>Uso de los Servicios de la PID</h3><p class="stats-empty">No hay destinos asociados a este código territorial.</p></section>`;
+    }
+    const modules = Object.entries(area.module_destinations || {}).sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .map(([name, count]) => `<li><span>${safe(name)}</span><strong>${formatCount(count)}</strong></li>`).join('');
+    const selectedModule = usageMetric === 'module' && usageModuleName
+      ? `<p class="stats-dates">Destinos con ${safe(usageModuleName)}: ${formatCount(area.module_destinations?.[usageModuleName] || 0)}</p>` : '';
+    const territoryCode = key === 'comarcas' ? `ID entidad: ${safe(code)}` : `NATCODE: ${safe(code)}`;
+    const memberNote = key === 'comarcas' ? '<p class="stats-dates">Incluye los municipios miembros de esta entidad.</p>' : '';
+    return `<section class="territory-stats"><h3>Uso de los Servicios de la PID</h3><div class="stats-grid"><div><strong>${formatCount(area.destinations)}</strong><span>destinos asociados</span></div><div><strong>${formatCount(area.users)}</strong><span>usuarios asociados</span></div></div><p class="stats-dates">${safe(title)} · ${territoryCode}</p><p class="stats-dates">Publicados: ${formatCount(area.published)} · No publicados: ${formatCount(area.unpublished)}</p>${memberNote}${selectedModule}<h4>Soluciones con más destinos</h4><ul>${modules || '<li><span>Sin soluciones registradas</span></li>'}</ul></section>`;
+  }
+
   async function identifyFeature(key, properties, event) {
     const popup = L.popup({ maxWidth: 310, closeButton: true, autoPan: true })
       .setLatLng(event.latlng)
-      .setContent(`<div class="territory-popup">${featureDetails(key, properties)}<section class="territory-stats"><h3>Datos de Infodestinos</h3><p class="stats-empty">Cargando estadísticas…</p></section></div>`)
+      .setContent(`<div class="territory-popup">${featureDetails(key, properties)}<section class="territory-stats"><h3>${activeDashboard === 'usage' ? 'Uso de los Servicios de la PID' : 'Datos de Infodestinos'}</h3><p class="stats-empty">Cargando estadísticas…</p></section></div>`)
       .openOn(map);
     try {
-      if (cmsThematicStates.get(key)) {
+      if (usageThematicStates.get(key)) {
+        await loadUsageStats();
+        if (map._popup === popup) popup.setContent(`<div class="territory-popup">${featureDetails(key, properties)}${usageStatisticsMarkup(key, properties)}</div>`);
+      } else if (cmsThematicStates.get(key)) {
         await loadCmsStats();
         if (map._popup === popup) popup.setContent(`<div class="territory-popup">${featureDetails(key, properties)}${cmsStatisticsMarkup(key, properties)}</div>`);
       } else {
@@ -855,7 +1132,8 @@
         if (map._popup === popup) popup.setContent(`<div class="territory-popup">${featureDetails(key, properties)}${statisticsMarkup(key, properties, statistics)}</div>`);
       }
     } catch (error) {
-      if (map._popup === popup) popup.setContent(`<div class="territory-popup">${featureDetails(key, properties)}<section class="territory-stats"><h3>Datos de Infodestinos</h3><p class="stats-empty">No se pudieron cargar las estadísticas. ${safe(error.message)}</p></section></div>`);
+      const title = activeDashboard === 'usage' ? 'Uso de los Servicios de la PID' : activeDashboard === 'cms' ? 'Datos del CMS Semántico' : 'Datos de Infodestinos';
+      if (map._popup === popup) popup.setContent(`<div class="territory-popup">${featureDetails(key, properties)}<section class="territory-stats"><h3>${title}</h3><p class="stats-empty">No se pudieron cargar las estadísticas. ${safe(error.message)}</p></section></div>`);
     }
   }
 
@@ -903,7 +1181,8 @@
       mouseover: event => {
         const target = event.target;
         if (key === 'provincias') {
-          target.setStyle(thematicStates.get(key)
+          const themed = thematicStates.get(key) || cmsThematicStates.get(key) || usageThematicStates.get(key);
+          target.setStyle(themed
             ? { weight: 1.5, color: '#284764', opacity: 1, fillOpacity: 0.94 }
             : { weight: 2, color: '#284764', opacity: 1, fillOpacity: 0.25 });
         } else {
@@ -976,6 +1255,9 @@
     try {
       if (visible) {
         const layer = await loadLayer(key);
+        // The user may switch dashboards (which clears layers) while the large
+        // GeoJSON is still loading. Respect the latest checkbox state.
+        if (!input.checked) return;
         layer.setStyle(feature => styleForFeature(key, feature));
         if (!map.hasLayer(layer)) layer.addTo(map);
         if (key === 'provincias' && !spainBounds) spainBounds = layer.getBounds();
@@ -985,6 +1267,7 @@
         if (layer && map.hasLayer(layer)) map.removeLayer(layer);
         const themeInput = document.querySelector(`[data-theme="${key}"]`);
         const cmsThemeInput = document.querySelector(`[data-cms-theme="${key}"]`);
+        const usageThemeInput = document.querySelector(`[data-usage-map-metric]:checked`);
         if (themeInput?.checked) {
           themeInput.checked = false;
           thematicStates.set(key, false);
@@ -993,9 +1276,15 @@
           cmsThemeInput.checked = false;
           cmsThematicStates.set(key, false);
         }
+        if (usageThemeInput && usageThematicStates.get(key)) {
+          usageThemeInput.checked = false;
+          usageThematicStates.set(key, false);
+          usageMetricEnabled = false;
+        }
         layer?.setStyle(() => definitions[key].style());
         renderThematicLegend();
         renderCmsLegend();
+        renderUsageLegend();
       }
       updateStatus();
     } catch (error) {
@@ -1020,11 +1309,12 @@
 
   const dashboardTabs = [
     { tab: $('#tab-no-ont'), panel: $('#entity-insights') },
-    { tab: $('#tab-dashboard-two'), panel: $('#dashboard-two') }
+    { tab: $('#tab-dashboard-two'), panel: $('#dashboard-two') },
+    { tab: $('#tab-usage'), panel: $('#usage-dashboard') }
   ];
   dashboardTabs.forEach(({ tab, panel }) => {
     tab.addEventListener('click', async () => {
-      activeDashboard = tab.id === 'tab-dashboard-two' ? 'cms' : 'infodestinos';
+      activeDashboard = tab.id === 'tab-dashboard-two' ? 'cms' : tab.id === 'tab-usage' ? 'usage' : 'infodestinos';
       dashboardTabs.forEach(({ tab: otherTab, panel: otherPanel }) => {
         const selected = otherTab === tab;
         otherTab.setAttribute('aria-selected', String(selected));
@@ -1032,7 +1322,33 @@
         otherPanel.hidden = !selected;
       });
       await clearAllThematicLayers();
+      if (activeDashboard === 'usage') {
+        try {
+          renderUsageDashboard(await loadUsageStats());
+        } catch (error) {
+          $('#usage-kpis').innerHTML = `<p class="stats-empty">No se pudieron cargar los datos de uso: ${safe(error.message)}</p>`;
+        }
+      }
     });
+  });
+
+  document.querySelectorAll('[data-usage-level]').forEach(button => button.addEventListener('click', () => {
+    usageLevel = button.dataset.usageLevel;
+    renderUsageCharts();
+  }));
+  document.querySelectorAll('[data-usage-map-level]').forEach(button => button.addEventListener('click', async () => {
+    usageMapLevel = button.dataset.usageMapLevel;
+    document.querySelectorAll('[data-usage-map-level]').forEach(other => other.setAttribute('aria-pressed', String(other === button)));
+    if (usageMetricEnabled) await setUsageMetricLayer(usageMetric, true);
+  }));
+  document.querySelectorAll('[data-usage-map-metric]').forEach(input => input.addEventListener('change', event => {
+    setUsageMetricLayer(event.target.dataset.usageMapMetric, event.target.checked);
+  }));
+  $('#usage-module-select').addEventListener('change', event => {
+    usageModuleName = event.target.value;
+    if (usageMetric !== 'module') return;
+    rebuildUsageScales();
+    refreshUsageLayers();
   });
 
   map.on('resize', () => map.invalidateSize());

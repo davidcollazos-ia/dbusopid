@@ -15,6 +15,7 @@ for (const file of [
   'visor_estadisticas.json',
   'visor_cms_stats.json',
   'visor_cms_timeline.json',
+  'visor_usage_stats.json',
   'visor_municipios.geojson.gz',
   'visor_provincias.geojson.gz',
   'visor_comarcas.geojson.gz'
