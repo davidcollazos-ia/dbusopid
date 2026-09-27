@@ -1,0 +1,36 @@
+name: Publicar visor en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v6
+      - name: Preparar GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Preparar los archivos estáticos del visor
+        run: node build_static.mjs
+      - name: Subir el sitio estático
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

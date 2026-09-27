@@ -1,0 +1,6 @@
+{
+  "framework": null,
+  "buildCommand": "node build_static.mjs",
+  "outputDirectory": "_site",
+  "installCommand": ""
+}

@@ -1,28 +1,41 @@
 # Visor de información turística de la PID
 
-Aplicación web Leaflet con dos dashboards: datos no ontológicos de InfoDestinos y recursos turísticos del CMS semántico. El dashboard CMS se abre por defecto.
+Visor Leaflet con dos dashboards: información No Ontológica y recursos turísticos del CMS semántico. El dashboard CMS se abre por defecto.
 
-## Despliegue
+## Publicación estática
 
-El repositorio incluye un `Dockerfile` listo para plataformas que admiten contenedores. Configura el servicio para construir ese Dockerfile y exponer el puerto asignado en la variable `PORT`.
+La aplicación funciona como un sitio estático. No necesita un servidor Python ni Docker para publicarse: el navegador descarga HTML, CSS, JavaScript y los datos ya preparados.
 
-Para probarlo localmente con Docker:
+### GitHub Pages
+
+El flujo de GitHub Actions de `.github/workflows/deploy-pages.yml` publica el visor automáticamente con cada cambio en `main`. En GitHub, configura **Settings → Pages → Build and deployment → Source → GitHub Actions**. El sitio publicado aparecerá en la URL que muestra el entorno `github-pages` en la pestaña Actions.
+
+### Vercel
+
+Importa este repositorio en Vercel. La configuración de `vercel.json` prepara el directorio estático `_site/` y publica solo los archivos del visor y sus datos.
+
+### Preparar los archivos localmente
+
+Se requiere Node.js, sin dependencias adicionales:
 
 ```sh
-docker build -t visor-pid .
-docker run --rm -p 8000:8000 visor-pid
+node build_static.mjs
 ```
 
-Después abre <http://localhost:8000/>. El servidor usa solo la biblioteca estándar de Python; no necesita instalar paquetes adicionales.
+El resultado queda en `_site/`, listo para servir desde cualquier hosting estático.
 
-## Contenido incluido
+## Desarrollo local con Python (opcional)
 
-- `app.py`, la página del visor y sus estilos, scripts y logo.
-- Los GeoJSON municipales, provinciales y supramunicipales comprimidos.
-- Los índices estadísticos preparados para los dos dashboards y la serie temporal CMS.
+Para probar el visor desde el repositorio:
 
-Se versionan los resultados ligeros que necesita la aplicación, no las fuentes completas de InfoDestinos, los Excel originales, temporales ni archivos de trabajo.
+```sh
+python app.py
+```
 
-Leaflet y las teselas de OpenStreetMap se cargan desde sus servicios públicos, por lo que el navegador del usuario necesita conexión a Internet para mostrar el mapa base.
+Después abre <http://localhost:8000/>. Python solo se usa para servir los archivos localmente; no forma parte del despliegue estático.
 
-Los ficheros estadísticos y las geometrías que sirven los dashboards se incluyen ya preparados en `Data/`.
+## Datos y servicios externos
+
+Se incluyen capas geográficas comprimidas e índices estadísticos ligeros. El navegador las descomprime al cargarlas. Las fuentes originales completas y los archivos de trabajo no forman parte del sitio.
+
+Leaflet y las teselas de OpenStreetMap se cargan desde sus servicios públicos, así que el navegador necesita conexión a Internet para mostrar el mapa base.

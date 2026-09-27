@@ -163,7 +163,7 @@
 
   function loadStats() {
     if (!statsPromise) {
-      statsPromise = fetch('/api/stats', { cache: 'no-cache' }).then(response => {
+      statsPromise = fetch('Data/visor_estadisticas.json', { cache: 'no-cache' }).then(response => {
         if (!response.ok) throw new Error(`No se pudieron cargar las estadísticas (${response.status}).`);
         return response.json();
       }).catch(error => {
@@ -176,7 +176,7 @@
 
   function loadCmsStats() {
     if (!cmsPromise) {
-      cmsPromise = fetch('/Data/visor_cms_stats.json', { cache: 'no-cache' }).then(response => {
+      cmsPromise = fetch('Data/visor_cms_stats.json', { cache: 'no-cache' }).then(response => {
         if (!response.ok) throw new Error(`No se pudieron cargar los datos del CMS (${response.status}).`);
         return response.json();
       }).catch(error => {
@@ -189,7 +189,7 @@
 
   function loadCmsTimeline() {
     if (!cmsTimelinePromise) {
-      cmsTimelinePromise = fetch('/Data/visor_cms_timeline.json', { cache: 'no-cache' }).then(response => {
+      cmsTimelinePromise = fetch('Data/visor_cms_timeline.json', { cache: 'no-cache' }).then(response => {
         if (!response.ok) throw new Error(`No se pudo cargar la serie semanal del CMS (${response.status}).`);
         return response.json();
       }).catch(error => {
@@ -945,9 +945,13 @@
       loading.classList.add('visible');
       try {
         setStatus(`Cargando ${definitions[key].label.toLowerCase()}`, `${definitions[key].count} · geometría local`, 'loading');
-        const response = await fetch(`/data/${key}.geojson`, { cache: 'force-cache' });
+        const response = await fetch(`Data/visor_${key}.geojson.gz`, { cache: 'force-cache' });
         if (!response.ok) throw new Error(`No se pudo cargar la capa de ${definitions[key].label.toLowerCase()} (${response.status}).`);
-        const collection = await response.json();
+        if (typeof DecompressionStream === 'undefined') {
+          throw new Error('Este navegador no permite descomprimir las capas geográficas. Actualízalo para continuar.');
+        }
+        const decompressed = response.body.pipeThrough(new DecompressionStream('gzip'));
+        const collection = await new Response(decompressed).json();
         const layer = L.geoJSON(collection, {
           renderer: L.canvas({ padding: 0.18 }),
           style: feature => styleForFeature(key, feature),
