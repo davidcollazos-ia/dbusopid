@@ -1,0 +1,17 @@
+**
+!app.py
+!visor_capas.html
+!README.md
+!Dockerfile
+!Data/
+!Data/visor_estadisticas.json
+!Data/visor_cms_stats.json
+!Data/visor_cms_timeline.json
+!Data/visor_municipios.geojson.gz
+!Data/visor_provincias.geojson.gz
+!Data/visor_comarcas.geojson.gz
+!static/
+!static/visor_capas.js
+!static/visor_capas.css
+!static/img/
+!static/img/logo-pid.png

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f1f4f7">
+  <title>PID · visor geográfico</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="static/visor_capas.css?v=20260927-13">
+</head>
+<body>
+  <aside class="sidebar">
+    <header class="brand">
+      <img class="pid-logo" src="static/img/logo-pid.png" alt="Plataforma Inteligente de Destinos">
+      <h1 class="brand-name">Información de uso de la PID</h1>
+    </header>
+
+    <nav class="dashboard-switcher" role="tablist" aria-label="Dashboards">
+      <button id="tab-no-ont" type="button" role="tab" aria-selected="false" aria-controls="entity-insights" tabindex="-1">Datos No Ontológicos</button>
+      <button id="tab-dashboard-two" type="button" role="tab" aria-selected="true" aria-controls="dashboard-two">Recursos turísticos</button>
+    </nav>
+
+    <div class="sidebar-scroll">
+      <div class="map-data-state" hidden aria-hidden="true">
+        <input id="toggle-municipios" type="checkbox" data-layer="municipios">
+        <input id="toggle-provincias" type="checkbox" data-layer="provincias">
+        <input id="toggle-comarcas" type="checkbox" data-layer="comarcas">
+      </div>
+
+      <section id="entity-insights" class="dashboard" role="tabpanel" aria-labelledby="tab-no-ont" aria-live="polite" aria-label="Estadísticas de información No Ontológica" hidden>
+        <header class="dashboard-heading"><span class="insights-kicker">Datos de información No Ontológica</span></header>
+        <div id="dashboard-kpis" class="dashboard-kpis"></div>
+        <section class="dashboard-chart-section">
+          <div class="dashboard-chart-heading"><h3>Registros por tipología</h3><span id="dashboard-chart-subtitle">Municipios</span></div>
+          <div class="dashboard-tabs" role="tablist" aria-label="Nivel territorial">
+            <button type="button" role="tab" data-stats-level="municipio" aria-selected="true">Municipios</button>
+            <button type="button" role="tab" data-stats-level="provincia" aria-selected="false">Provincias</button>
+            <button type="button" role="tab" data-stats-level="comarca" aria-selected="false">Supramunicipales</button>
+          </div>
+          <div id="typology-chart" class="typology-chart"><p class="stats-empty">Preparando gráfico…</p></div>
+          <p id="dashboard-period" class="dashboard-period"></p>
+        </section>
+        <section class="dashboard-chart-section evolution-section" aria-label="Evolución mensual de registros en 2026">
+          <div class="dashboard-chart-heading"><h3>Evolución de la carga de datos</h3><span>Enero–diciembre 2026</span></div>
+          <p class="evolution-caption">Total acumulado mensual · todos los ámbitos territoriales</p>
+          <div id="evolution-chart" class="evolution-chart" role="img" aria-label="Evolución mensual acumulada de registros cargados en 2026"><p class="stats-empty">Preparando gráfico…</p></div>
+        </section>
+      </section>
+
+      <section id="dashboard-two" class="dashboard cms-dashboard" role="tabpanel" aria-labelledby="tab-dashboard-two" aria-label="Datos del CMS Semántico">
+        <header class="dashboard-heading"><span class="insights-kicker">Datos del CMS Semántico</span></header>
+
+        <section class="dashboard-chart-section cms-load-evolution-section">
+          <div class="dashboard-chart-heading"><h3>Evolución de carga de recursos</h3><span>% del contenido del 24/09/2026</span></div>
+          <p class="cms-evolution-caption">Selecciona un ámbito. El 24/09 representa el 100% del contenido de referencia.</p>
+          <div class="dashboard-tabs cms-evolution-level-tabs" role="group" aria-label="Ámbito de la evolución de carga de recursos">
+            <button type="button" data-cms-evolution-level="municipio" aria-pressed="false">Municipios</button>
+            <button type="button" data-cms-evolution-level="provincia" aria-pressed="true">Provincias</button>
+            <button type="button" data-cms-evolution-level="supramunicipal" aria-pressed="false">Supramunicipales</button>
+          </div>
+          <label class="cms-load-map-toggle"><input id="cms-load-map-toggle" type="checkbox" checked><span>Mostrar este porcentaje en el mapa</span></label>
+          <div class="dashboard-chart-heading cms-evolution-chart-subheading"><h4>Contenido registrado por semana</h4><span id="cms-evolution-level-label">Municipios</span></div>
+          <div id="cms-evolution-chart" class="cms-evolution-chart"><p class="stats-empty">Cargando evolución…</p></div>
+        </section>
+
+        <section class="dashboard-chart-section">
+          <div class="dashboard-chart-heading"><h3>Recuentos por categoría</h3><span id="cms-category-level-label">Municipios</span></div>
+          <div class="dashboard-tabs cms-level-tabs" role="tablist" aria-label="Ámbito de los recuentos CMS">
+            <button type="button" role="tab" data-cms-level="municipio" aria-selected="true">Municipios</button>
+            <button type="button" role="tab" data-cms-level="provincia" aria-selected="false">Provincias</button>
+            <button type="button" role="tab" data-cms-level="supramunicipal" aria-selected="false">Supramunicipales</button>
+          </div>
+          <div id="cms-category-chart" class="cms-category-chart"><p class="stats-empty">Cargando categorías…</p></div>
+        </section>
+
+        <section class="dashboard-chart-section cms-map-controls">
+          <div class="dashboard-chart-heading"><h3>Mapas temáticos</h3><span>Mostrar / ocultar</span></div>
+          <span class="cms-metric-label">Ámbito geográfico</span>
+          <div class="dashboard-tabs cms-map-level-tabs" role="group" aria-label="Ámbito del mapa temático">
+            <button type="button" data-cms-map-level="municipio" aria-pressed="false">Municipios</button>
+            <button type="button" data-cms-map-level="provincia" aria-pressed="true">Provincias</button>
+            <button type="button" data-cms-map-level="supramunicipal" aria-pressed="false">Supramunicipales</button>
+          </div>
+          <span class="cms-metric-label cms-theme-list-label">Capas temáticas <small>Activa un temático cada vez</small></span>
+          <div id="cms-map-layers" class="cms-map-layers"><p class="stats-empty">Cargando capas…</p></div>
+          <p class="cms-source-note">La evolución semanal muestra el porcentaje de las tripletas del 24/09/2026 (100%). Los ámbitos se enlazan por su código y se representan por separado.</p>
+        </section>
+
+      </section>
+
+      <p class="map-file-notice" hidden>Para consultar el mapa, abre el proyecto desde el servidor local. Si Python está instalado, puedes usar <code>python app.py</code>.</p>
+    </div>
+  </aside>
+
+  <main class="map-shell">
+    <div id="map" aria-label="Mapa geográfico interactivo de España">
+    </div>
+    <div id="thematic-legend" class="thematic-legend" hidden aria-live="polite" aria-label="Controles de mapa temático y evolución temporal"></div>
+    <div id="loading-indicator" class="loading-indicator" role="status"><span class="spinner"></span><span>Cargando capa…</span></div>
+    <noscript>Este visor necesita JavaScript activado.</noscript>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="static/visor_capas.js?v=20260927-15"></script>
+</body>
+</html>

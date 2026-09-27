@@ -1,0 +1,26 @@
+# Archivos locales, cachés y fuentes de datos
+__pycache__/
+*.py[cod]
+*.tmp
+.env
+.env.*
+.vscode/
+.idea/
+outputs/
+
+# En Data solo se versionan los artefactos que consume el visor
+Data/*
+!Data/visor_estadisticas.json
+!Data/visor_cms_stats.json
+!Data/visor_cms_timeline.json
+!Data/visor_municipios.geojson.gz
+!Data/visor_provincias.geojson.gz
+!Data/visor_comarcas.geojson.gz
+
+# Solo los recursos del visor actual
+static/*
+!static/visor_capas.js
+!static/visor_capas.css
+!static/img/
+static/img/*
+!static/img/logo-pid.png
